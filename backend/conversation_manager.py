@@ -38,7 +38,8 @@ FIELD_QUESTIONS = {
         "Do you know the soil pH from a soil test? If not, we can continue without it."
     ),
     "organic_carbon": (
-        "Do you have a soil organic carbon value from a soil test? If not, we can continue without it."
+        "Do you have a soil organic carbon value from a soil test? "
+        "If not, we can continue without it."
     ),
     "rainfall": (
         "Would you describe the area's rainfall as low, moderate, or high?"
@@ -47,10 +48,12 @@ FIELD_QUESTIONS = {
         "Do you know the typical temperature around the land?"
     ),
     "species_richness": (
-        "Would you describe the number of different species around the land as low, moderate, or high?"
+        "Would you describe the number of different species around the land "
+        "as low, moderate, or high?"
     ),
     "habitat_diversity": (
-        "Does the area contain different habitats such as trees, hedgerows, grass, ponds, or other natural patches?"
+        "Does the area contain different habitats such as trees, hedgerows, "
+        "grass, ponds, or other natural patches?"
     ),
     "pollution": (
         "Is there any noticeable pollution or contamination affecting the area?"
@@ -65,7 +68,7 @@ def extraction_to_facts(
     extraction: ProfileExtraction,
 ) -> dict[str, Any]:
     """
-    Convert Gemini's ProfileExtraction into the flat environmental
+    Convert the ProfileExtraction result into the flat environmental
     field names used by ConversationState.
 
     Control fields such as environmental_relevance are deliberately
@@ -76,6 +79,7 @@ def extraction_to_facts(
         exclude_none=True,
         exclude={
             "environmental_relevance",
+            "recommendation_requested",
             "unknown_fields",
             "context_notes",
         },
@@ -127,7 +131,7 @@ def update_conversation_state(
     extraction: ProfileExtraction,
 ) -> None:
     """
-    Apply one Gemini extraction result to conversation memory.
+    Apply one extraction result to conversation memory.
     """
 
     facts = extraction_to_facts(
@@ -182,8 +186,12 @@ def choose_next_question(
     known = state.known
     declined = state.user_declined
 
-    # Farming context:
+    # ---------------------------------------------------------
+    # 1. Farming context
+    # ---------------------------------------------------------
+    #
     # Crop is useful before asking detailed management questions.
+
     if (
         (
             "land_use" in known
@@ -197,8 +205,13 @@ def choose_next_question(
             FIELD_QUESTIONS["crop"],
         )
 
+    # ---------------------------------------------------------
+    # 2. Cropping pattern
+    # ---------------------------------------------------------
+    #
     # Once a crop is known, understand whether the system is
     # monoculture, rotation, or mixed cropping.
+
     if (
         "crop" in known
         and "cropping_pattern" not in known
@@ -209,8 +222,13 @@ def choose_next_question(
             FIELD_QUESTIONS["cropping_pattern"],
         )
 
+    # ---------------------------------------------------------
+    # 3. Soil moisture
+    # ---------------------------------------------------------
+    #
     # If soil has been mentioned but moisture is unknown,
     # ask a simple qualitative question first.
+
     if (
         "soil_moisture" not in known
         and "soil_moisture" not in declined
@@ -228,7 +246,12 @@ def choose_next_question(
             FIELD_QUESTIONS["soil_moisture"],
         )
 
+    # ---------------------------------------------------------
+    # 4. Soil pH
+    # ---------------------------------------------------------
+    #
     # Quantitative soil information comes later.
+
     if (
         "soil_ph" not in known
         and "soil_ph" not in declined
@@ -246,6 +269,7 @@ def choose_next_question(
         )
 
     return None, None
+
 
 def has_sufficient_reasoning_context(
     state: ConversationState,
@@ -270,6 +294,7 @@ def has_sufficient_reasoning_context(
         return True
 
     return False
+
 
 def process_extraction(
     state: ConversationState,
@@ -318,24 +343,39 @@ def process_extraction(
     # This must happen before the relevance check because a contextual
     # reply such as "I don't know" may itself not be environmental,
     # while still being a valid answer to Canopy's previous question.
+
     if newly_declined:
+        can_reason = has_sufficient_reasoning_context(state)
+
+        if can_reason:
+            response = (
+                "No problem — we can proceed without that information. "
+                "I won't assume a value you don't know. "
+                "I have enough environmental context to assess your situation "
+                "using the information you've provided."
+            )
+        else:
+            response = (
+                "No problem — we can continue without that information. "
+                "I won't assume a value you don't know. "
+                "Tell me a little more about the environmental conditions "
+                "if you'd like a more specific assessment."
+            )
+
         return {
             "needs_clarification": False,
-            "can_reason": has_environmental_context(state),
+            "can_reason": can_reason,
             "missing_fields": sorted(newly_declined),
-            "response": (
-                "No problem. We can work with what you've shared so far. "
-                "I'll keep the missing information in mind and won't assume "
-                "values you don't know."
-            ),
+            "response": response,
         }
 
     # ---------------------------------------------------------
     # CASE 2: Message is not environmentally relevant
     # ---------------------------------------------------------
     #
-    # This is semantic, not keyword-based. Gemini decides whether
-    # the message is relevant to environmental assessment.
+    # This is semantic, not keyword-based. The extraction component
+    # decides whether the message is relevant to environmental assessment.
+
     if not extraction.environmental_relevance:
         return {
             "needs_clarification": False,
@@ -358,6 +398,7 @@ def process_extraction(
     #
     # This is environmentally relevant, but there is not enough
     # site-specific information to make a responsible recommendation.
+
     if not has_environmental_context(state):
         return {
             "needs_clarification": True,
@@ -375,6 +416,7 @@ def process_extraction(
     # ---------------------------------------------------------
     #
     # Ask at most ONE useful targeted question.
+
     field_name, question = choose_next_question(
         state
     )
@@ -394,6 +436,7 @@ def process_extraction(
     # This does NOT mean the profile is complete.
     # It only means our clarification policy has no higher-priority
     # question to ask before reasoning.
+
     if not has_sufficient_reasoning_context(state):
         return {
             "needs_clarification": False,
@@ -406,6 +449,8 @@ def process_extraction(
             ),
         }
 
+    # The user has environmental context but has not actually
+    # requested advice yet.
     if not extraction.recommendation_requested:
         return {
             "needs_clarification": False,
@@ -417,6 +462,10 @@ def process_extraction(
                 "the environmental conditions."
             ),
         }
+
+    # ---------------------------------------------------------
+    # CASE 6: Ready for RAG + environmental reasoning
+    # ---------------------------------------------------------
 
     return {
         "needs_clarification": False,
@@ -466,7 +515,7 @@ def process_message(
 
         user message
             ↓
-        context-aware Gemini extraction
+        context-aware Cohere extraction
             ↓
         memory update
             ↓

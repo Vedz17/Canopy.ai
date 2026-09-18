@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from schemas import (
     EnvironmentalProfile,
@@ -11,18 +12,28 @@ from schemas import (
 )
 from retrieval_service import retrieve_chunks
 from reasoning_service import generate_recommendation
-
 from conversation_service import get_or_create_session
 from conversation_manager import (
     build_environmental_profile,
     process_message,
 )
 
-
 app = FastAPI(
     title="Canopy AI",
     description="AI-powered environmental intelligence system",
     version="0.1.0",
+)
+
+# Enable CORS for the React/Vite dev server and production clients
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -79,10 +90,8 @@ def recommend(request: RecommendationRequest):
         "recommendation": recommendation,
         "retrieved_evidence": retrieved_evidence,
     }
-@app.post(
-    "/chat",
-    response_model=ChatResponse,
-)
+
+
 @app.post(
     "/chat",
     response_model=ChatResponse,
@@ -104,9 +113,7 @@ def chat(request: ChatRequest):
     recommendation = None
     retrieved_evidence = []
 
-    # IMPORTANT:
-    # Only execute RAG + Gemini when the conversation manager
-    # explicitly allows reasoning.
+    # Only execute RAG + Gemini when the conversation manager explicitly allows reasoning
     if result.get("can_reason", False):
         recommendation, retrieved_evidence = generate_recommendation(
             profile=profile,
@@ -121,4 +128,4 @@ def chat(request: ChatRequest):
         "profile": profile,
         "recommendation": recommendation,
         "retrieved_evidence": retrieved_evidence,
-    }
+    }   

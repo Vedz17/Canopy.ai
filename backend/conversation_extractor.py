@@ -1,25 +1,27 @@
 import os
+import re
 
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
+from cohere import ClientV2
 
 from schemas import ProfileExtraction
 
 
 load_dotenv()
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL = os.getenv(
-    "GEMINI_MODEL",
-    "gemini-2.5-flash",
+
+COHERE_API_KEY = os.getenv("COHERE_API_KEY")
+
+COHERE_GENERATION_MODEL = os.getenv(
+    "COHERE_GENERATION_MODEL",
+    "command-a-03-2025",
 )
 
-if not GEMINI_API_KEY:
-    raise ValueError("GEMINI_API_KEY is not set")
+if not COHERE_API_KEY:
+    raise ValueError("COHERE_API_KEY is not set")
 
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+client = ClientV2(api_key=COHERE_API_KEY)
 
 
 SYSTEM_INSTRUCTION = """
@@ -73,14 +75,103 @@ IMPORTANT RULES:
     what they should do, how to improve the environmental condition, or
     an equivalent request. Judge this from meaning and conversation
     context, not from specific keywords alone.
-
 19. Set recommendation_requested to false when the user is only providing
     environmental information, answering a clarification question, saying
     they do not know something, greeting, or discussing an unrelated topic.
-
 20. A message may be environmentally relevant while recommendation_requested
     is false.
+
+21. Return ONLY valid JSON matching the ProfileExtraction structure.
+22. unknown_fields MUST always be an array of strings.
+23. context_notes MUST always be an array of strings.
+24. If there are no unknown fields, return "unknown_fields": [].
+25. If there are no context notes, return "context_notes": [].
 """
+
+
+def apply_explicit_fact_overrides(
+    message: str,
+    extraction: ProfileExtraction,
+) -> ProfileExtraction:
+    """
+    Safely recover explicit facts that the LLM may miss.
+
+    These overrides only extract information literally stated by the user.
+    They do not infer environmental measurements.
+    """
+
+    text = message.strip()
+    lower = text.lower()
+
+    # ---------------------------------------------------------
+    # Soil organic carbon
+    # ---------------------------------------------------------
+    soc_match = re.search(
+        r"(?:soil\s+organic\s+carbon|organic\s+carbon|soc)"
+        r"\s*(?:is|=|:)?\s*(\d+(?:\.\d+)?)\s*%",
+        lower,
+    )
+
+    if soc_match:
+        extraction.organic_carbon = float(soc_match.group(1))
+
+    # ---------------------------------------------------------
+    # Soil moisture
+    # ---------------------------------------------------------
+    if re.search(
+        r"\bsoil\b.{0,40}\b(?:dry|very dry)\b",
+        lower,
+    ):
+        extraction.soil_moisture = "low"
+
+    elif re.search(
+        r"\bsoil\b.{0,40}\bmoist\b",
+        lower,
+    ):
+        extraction.soil_moisture = "medium"
+
+    # ---------------------------------------------------------
+    # Rainfall
+    # ---------------------------------------------------------
+    if re.search(
+        r"\b(?:low|limited|scarce)\s+(?:and\s+irregular\s+)?rainfall\b",
+        lower,
+    ):
+        extraction.rainfall = "low"
+
+    # ---------------------------------------------------------
+    # Crop
+    # ---------------------------------------------------------
+    if re.search(r"\bwheat\b", lower):
+        extraction.crop = "wheat"
+
+    # ---------------------------------------------------------
+    # Continuous monoculture
+    # ---------------------------------------------------------
+    if (
+        re.search(
+            r"\bcontinuous(?:ly)?\s+(?:wheat\s+)?cultivation\b",
+            lower,
+        )
+        or re.search(r"\bcontinuous\s+monoculture\b", lower)
+        or re.search(r"\bmonoculture\b", lower)
+        or re.search(r"\bgrow\s+wheat\s+continuously\b", lower)
+    ):
+        extraction.cropping_pattern = "monoculture"
+
+    # ---------------------------------------------------------
+    # Explicit biodiversity observation
+    # ---------------------------------------------------------
+    if re.search(
+        r"\bbiodiversity\b.{0,30}\b(?:low|declining|poor)\b",
+        lower,
+    ):
+        note = "Biodiversity is low."
+
+        if note not in extraction.context_notes:
+            extraction.context_notes.append(note)
+
+    return extraction
 
 
 def extract_profile_information(
@@ -130,22 +221,42 @@ Latest user message:
 {message}
 """
 
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=contents,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_INSTRUCTION,
-            temperature=0.0,
-            response_mime_type="application/json",
-            response_schema=ProfileExtraction,
-        ),
+    response = client.chat(
+        model=COHERE_GENERATION_MODEL,
+        messages=[
+            {
+                "role": "system",
+                "content": SYSTEM_INSTRUCTION,
+            },
+            {
+                "role": "user",
+                "content": contents,
+            },
+        ],
+        temperature=0.2,
+        response_format={
+            "type": "json_object",
+        },
     )
 
-    if not response.text:
-        raise RuntimeError(
-            "Gemini returned an empty profile extraction response."
+    response_text = response.message.content[0].text
+
+    if not response_text:
+        raise RuntimeError("Cohere returned an empty response.")
+
+    try:
+        extraction = ProfileExtraction.model_validate_json(
+            response_text
         )
+    except Exception as exc:
+        raise RuntimeError(
+            "Cohere returned invalid ProfileExtraction JSON: "
+            f"{response_text}"
+        ) from exc
 
-    return ProfileExtraction.model_validate_json(
-        response.text
+    extraction = apply_explicit_fact_overrides(
+        message,
+        extraction,
     )
+
+    return extraction
