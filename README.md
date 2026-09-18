@@ -2,6 +2,16 @@
 
 > **AI-powered environmental intelligence for healthier land and ecosystems.**
 
+## 🚀 Live Demo
+
+**Frontend:** https://canopyai-theta.vercel.app/
+
+**Backend:** https://canopy-backend-8wpo.onrender.com
+
+> ⚠️ **Demo Note:** The backend and database are hosted on Render's free tier and may spin down after a period of inactivity. If the app takes a few seconds to respond on the first request, please allow the backend a moment to wake up and then continue with the demo.
+
+
+
 Canopy AI is an AI-powered environmental decision-support system that combines **scientific knowledge, structured environmental data, Retrieval-Augmented Generation (RAG), and multi-metric reasoning** to turn environmental observations into evidence-backed recommendations.
 
 Instead of looking at soil, climate, land use, and biodiversity independently, Canopy AI reasons about how these environmental factors interact.
