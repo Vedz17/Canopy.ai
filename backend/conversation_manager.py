@@ -189,7 +189,7 @@ def choose_next_question(
     # ---------------------------------------------------------
     # 1. Farming context
     # ---------------------------------------------------------
-    #
+
     # Crop is useful before asking detailed management questions.
 
     if (
@@ -208,7 +208,7 @@ def choose_next_question(
     # ---------------------------------------------------------
     # 2. Cropping pattern
     # ---------------------------------------------------------
-    #
+
     # Once a crop is known, understand whether the system is
     # monoculture, rotation, or mixed cropping.
 
@@ -225,7 +225,7 @@ def choose_next_question(
     # ---------------------------------------------------------
     # 3. Soil moisture
     # ---------------------------------------------------------
-    #
+
     # If soil has been mentioned but moisture is unknown,
     # ask a simple qualitative question first.
 
@@ -249,7 +249,7 @@ def choose_next_question(
     # ---------------------------------------------------------
     # 4. Soil pH
     # ---------------------------------------------------------
-    #
+
     # Quantitative soil information comes later.
 
     if (
@@ -339,7 +339,7 @@ def process_extraction(
     # ---------------------------------------------------------
     # CASE 1: Explicit "I don't know" / cannot provide information
     # ---------------------------------------------------------
-    #
+
     # This must happen before the relevance check because a contextual
     # reply such as "I don't know" may itself not be environmental,
     # while still being a valid answer to Canopy's previous question.
@@ -372,7 +372,7 @@ def process_extraction(
     # ---------------------------------------------------------
     # CASE 2: Message is not environmentally relevant
     # ---------------------------------------------------------
-    #
+
     # This is semantic, not keyword-based. The extraction component
     # decides whether the message is relevant to environmental assessment.
 
@@ -392,7 +392,7 @@ def process_extraction(
     # ---------------------------------------------------------
     # CASE 3: Environmental message but no usable context yet
     # ---------------------------------------------------------
-    #
+
     # Example:
     # "What should I do about biodiversity?"
     #
@@ -414,7 +414,7 @@ def process_extraction(
     # ---------------------------------------------------------
     # CASE 4: Environmental context exists
     # ---------------------------------------------------------
-    #
+
     # Ask at most ONE useful targeted question.
 
     field_name, question = choose_next_question(
@@ -432,7 +432,7 @@ def process_extraction(
     # ---------------------------------------------------------
     # CASE 5: Enough context for environmental reasoning
     # ---------------------------------------------------------
-    #
+
     # This does NOT mean the profile is complete.
     # It only means our clarification policy has no higher-priority
     # question to ask before reasoning.
@@ -446,20 +446,6 @@ def process_extraction(
                 "Got it. Tell me a little more about the environmental "
                 "conditions you're assessing, or ask me what you should "
                 "do to improve them."
-            ),
-        }
-
-    # The user has environmental context but has not actually
-    # requested advice yet.
-    if not extraction.recommendation_requested:
-        return {
-            "needs_clarification": False,
-            "can_reason": False,
-            "missing_fields": [],
-            "response": (
-                "Got it. I have enough context to start an assessment. "
-                "If you'd like, ask me what you should do to improve "
-                "the environmental conditions."
             ),
         }
 
