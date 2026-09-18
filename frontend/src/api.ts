@@ -1,6 +1,6 @@
 import type{ ChatResponse } from './types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://canopy-backend-8wpo.onrender.com';
 
 export async function sendChatMessage(sessionId: string, message: string): Promise<ChatResponse> {
   const res = await fetch(`${API_BASE_URL}/chat`, {
