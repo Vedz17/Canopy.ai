@@ -2,7 +2,7 @@
 
 > **AI-powered environmental intelligence for healthier land and ecosystems.**
 
-## 🚀 Live Demo
+##  Live Demo
 
 **Frontend:** https://canopyai-theta.vercel.app/
 
