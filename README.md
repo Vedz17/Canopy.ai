@@ -8,7 +8,7 @@
 
 **Backend:** https://canopy-backend-8wpo.onrender.com
 
-> ⚠️ **Demo Note:** The backend and database are hosted on Render's free tier and may spin down after a period of inactivity. If the app takes a few seconds to respond on the first request, please allow the backend a moment to wake up and then continue with the demo.
+> ⚠️ **Demo Note: The backend and database are hosted on Render's free tier and may spin down after a period of inactivity. If the app takes a few seconds to respond on the first request, please allow the backend a moment to wake up and then continue with the demo.**
 
 
 
