@@ -458,8 +458,9 @@ def process_extraction(
         "can_reason": True,
         "missing_fields": [],
         "response": (
-            "Got it. I have enough context to reason from "
-            "what you've shared."
+            "Got it. I have enough context to reason from what you've shared. "
+            "If you share more about the crop, climate, biodiversity, or site, "
+            "I can refine the assessment further."
         ),
     }
 
