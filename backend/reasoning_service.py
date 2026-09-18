@@ -267,6 +267,36 @@ IMPORTANT RULES:
     applies specifically to the recommended intervention, OMIT the
     quantitative claim and use only the directly supported qualitative
     evidence.
+
+49. SITE-SUITABILITY / EFFECTIVENESS-MODIFICATION RULE:
+    Do NOT claim that the user's specific conditions make the recommended
+    strategy "particularly effective," "especially effective," "ideal,"
+    "well suited," or otherwise amplify, strengthen, or optimize its
+    effectiveness — UNLESS the retrieved evidence explicitly studies or
+    reports an interaction between that specific condition and the
+    strategy's effectiveness.
+
+    You MAY connect the recommendation to the user's profile by describing
+    RELEVANCE or APPLICABILITY (for example, "because you grow crop X under
+    continuous monoculture, diversification is applicable to your land
+    use"). This is a statement about fit, not about amplified effect.
+
+    Do NOT convert a general study finding into a claim that the user's
+    reported conditions strengthen or improve that finding's magnitude,
+    unless the evidence itself makes that comparison.
+
+    Example: do NOT write:
+    "Given your moist soil and moderate rainfall, agroforestry can be
+    particularly effective."
+    Instead state the general evidence finding as a study/meta-analysis
+    result, and separately state that the intervention is relevant given
+    the user's reported land use/crop, without implying that its magnitude
+    is amplified by those conditions.
+
+50. Every mechanism or effect statement in the "why" field must use
+    explicit attribution language (for example, "Retrieved evidence
+    indicates..." or "A meta-analysis of [topic] reports...") rather than
+    being stated as a plain, unsourced fact about the user's site.
 """
 
 
@@ -597,7 +627,12 @@ For each effect:
    attributed to a specific strategy.
 5. Confirm that any percentage is explicitly attributable to the same
    intervention.
-6. If any check fails, REMOVE the claim instead of guessing.
+6. Confirm that no sentence claims the user's specific conditions make
+   the strategy "particularly effective," "ideal," "well suited," or
+   otherwise more effective than the evidence reports, unless the
+   evidence explicitly studies that interaction. Rewrite such claims
+   as relevance/applicability or remove them.
+7. If any check fails, REMOVE the claim instead of guessing.
 
 
 OUTPUT REQUIREMENTS:
