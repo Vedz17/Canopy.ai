@@ -80,6 +80,8 @@ class ProfileExtraction(BaseModel):
     Every field is optional because users are not expected to provide
     a complete environmental profile.
     """
+    environmental_relevance: bool = False
+    recommendation_requested: bool = False
 
     soil_ph: Optional[float] = None
     organic_carbon: Optional[float] = None
@@ -113,3 +115,5 @@ class ChatResponse(BaseModel):
     needs_clarification: bool
     missing_fields: list[str]
     profile: EnvironmentalProfile
+    recommendation: Optional[Recommendation] = None
+    retrieved_evidence: list[RetrievedChunk] = []
