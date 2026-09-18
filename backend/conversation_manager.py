@@ -1,4 +1,5 @@
 from typing import Any
+
 from conversation_extractor import extract_profile_information
 
 from conversation_service import (
@@ -9,7 +10,16 @@ from conversation_service import (
     mark_user_declined,
     update_known_facts,
 )
-from schemas import ProfileExtraction
+
+from schemas import (
+    Biodiversity,
+    Climate,
+    EnvironmentalProfile,
+    HumanImpact,
+    Land,
+    ProfileExtraction,
+    Soil,
+)
 
 
 # Fields are intentionally prioritized by context.
@@ -55,19 +65,61 @@ def extraction_to_facts(
     extraction: ProfileExtraction,
 ) -> dict[str, Any]:
     """
-    Convert Gemini's ProfileExtraction into the flat field names
-    used by ConversationState.
+    Convert Gemini's ProfileExtraction into the flat environmental
+    field names used by ConversationState.
+
+    Control fields such as environmental_relevance are deliberately
+    excluded because they are not environmental facts.
     """
 
     data = extraction.model_dump(
         exclude_none=True,
         exclude={
+            "environmental_relevance",
             "unknown_fields",
             "context_notes",
         },
     )
 
     return data
+
+
+def build_environmental_profile(
+    state: ConversationState,
+) -> EnvironmentalProfile:
+    """
+    Convert the environmental facts currently known in the
+    conversation into the existing EnvironmentalProfile schema.
+
+    Missing values remain None. No values are inferred here.
+    """
+
+    known = state.known
+
+    return EnvironmentalProfile(
+        soil=Soil(
+            ph=known.get("soil_ph"),
+            organic_carbon=known.get("organic_carbon"),
+            moisture=known.get("soil_moisture"),
+        ),
+        climate=Climate(
+            temperature=known.get("temperature"),
+            rainfall=known.get("rainfall"),
+        ),
+        land=Land(
+            land_use=known.get("land_use"),
+            crop=known.get("crop"),
+            cropping_pattern=known.get("cropping_pattern"),
+        ),
+        biodiversity=Biodiversity(
+            species_richness=known.get("species_richness"),
+            habitat_diversity=known.get("habitat_diversity"),
+        ),
+        human_impact=HumanImpact(
+            pollution=known.get("pollution"),
+            deforestation=known.get("deforestation"),
+        ),
+    )
 
 
 def update_conversation_state(
@@ -78,7 +130,9 @@ def update_conversation_state(
     Apply one Gemini extraction result to conversation memory.
     """
 
-    facts = extraction_to_facts(extraction)
+    facts = extraction_to_facts(
+        extraction
+    )
 
     update_known_facts(
         state,
@@ -101,13 +155,16 @@ def has_environmental_context(
     state: ConversationState,
 ) -> bool:
     """
-    Determine whether the conversation contains enough information
-    to begin useful environmental reasoning.
+    Determine whether the conversation contains at least some
+    useful environmental information.
 
-    This intentionally does NOT require a complete profile.
+    This does NOT require a complete environmental profile.
     """
 
-    return len(state.known) > 0 or len(state.context_notes) > 0
+    return (
+        len(state.known) > 0
+        or len(state.context_notes) > 0
+    )
 
 
 def choose_next_question(
@@ -126,14 +183,22 @@ def choose_next_question(
     declined = state.user_declined
 
     # Farming context:
-    # Crop is usually useful before asking detailed management questions.
+    # Crop is useful before asking detailed management questions.
     if (
-        ("land_use" in known and "farm" in str(known["land_use"]).lower())
+        (
+            "land_use" in known
+            and "farm" in str(known["land_use"]).lower()
+        )
         and "crop" not in known
         and "crop" not in declined
     ):
-        return "crop", FIELD_QUESTIONS["crop"]
+        return (
+            "crop",
+            FIELD_QUESTIONS["crop"],
+        )
 
+    # Once a crop is known, understand whether the system is
+    # monoculture, rotation, or mixed cropping.
     if (
         "crop" in known
         and "cropping_pattern" not in known
@@ -144,13 +209,11 @@ def choose_next_question(
             FIELD_QUESTIONS["cropping_pattern"],
         )
 
-    # If the user has mentioned soil/context but moisture is unknown,
-    # moisture is a useful low-friction qualitative question.
+    # If soil has been mentioned but moisture is unknown,
+    # ask a simple qualitative question first.
     if (
-        (
-            "soil_moisture" not in known
-            and "soil_moisture" not in declined
-        )
+        "soil_moisture" not in known
+        and "soil_moisture" not in declined
         and (
             "soil_ph" in known
             or "organic_carbon" in known
@@ -177,27 +240,66 @@ def choose_next_question(
             )
         )
     ):
-        return "soil_ph", FIELD_QUESTIONS["soil_ph"]
+        return (
+            "soil_ph",
+            FIELD_QUESTIONS["soil_ph"],
+        )
 
     return None, None
 
+def has_sufficient_reasoning_context(
+    state: ConversationState,
+) -> bool:
+    """
+    Decide whether the conversation contains enough environmental
+    information for a recommendation.
+
+    This intentionally does not require a complete profile.
+    """
+
+    known = state.known
+
+    # Strong site-specific context:
+    # at least two explicit environmental facts.
+    if len(known) >= 2:
+        return True
+
+    # A qualitative environmental note plus one explicit fact
+    # is also useful context.
+    if len(known) >= 1 and len(state.context_notes) >= 1:
+        return True
+
+    return False
 
 def process_extraction(
     state: ConversationState,
     extraction: ProfileExtraction,
 ) -> dict[str, Any]:
     """
-    Apply extracted information and decide whether Canopy should
-    ask a clarification question or proceed with the information
-    currently available.
+    Apply extracted information and decide what Canopy should do next.
 
-    If the user explicitly does not know the answer to the previous
-    question, do not immediately ask another question.
+    Possible outcomes:
+
+    1. Non-environmental message:
+       redirect the conversation without reasoning.
+
+    2. Explicitly unknown information:
+       acknowledge it without repeating the question.
+
+    3. Environmental information but useful context is still missing:
+       ask one targeted clarification.
+
+    4. Environmental information with no further clarification needed:
+       mark the conversation ready for reasoning.
+
+    No environmental reasoning is performed in this function.
     """
 
-    # Remember which fields were already marked as unknown before
-    # processing this turn.
-    previously_declined = set(state.user_declined)
+    # Remember which fields were already marked as unknown
+    # before processing this turn.
+    previously_declined = set(
+        state.user_declined
+    )
 
     update_conversation_state(
         state,
@@ -209,11 +311,17 @@ def process_extraction(
         state.user_declined - previously_declined
     )
 
-    # The user explicitly said they do not know something.
-    # Do not immediately replace that with another question.
+    # ---------------------------------------------------------
+    # CASE 1: Explicit "I don't know" / cannot provide information
+    # ---------------------------------------------------------
+    #
+    # This must happen before the relevance check because a contextual
+    # reply such as "I don't know" may itself not be environmental,
+    # while still being a valid answer to Canopy's previous question.
     if newly_declined:
         return {
             "needs_clarification": False,
+            "can_reason": has_environmental_context(state),
             "missing_fields": sorted(newly_declined),
             "response": (
                 "No problem. We can work with what you've shared so far. "
@@ -222,8 +330,51 @@ def process_extraction(
             ),
         }
 
-    # No explicit unknown response.
-    # Ask only one useful clarification question if needed.
+    # ---------------------------------------------------------
+    # CASE 2: Message is not environmentally relevant
+    # ---------------------------------------------------------
+    #
+    # This is semantic, not keyword-based. Gemini decides whether
+    # the message is relevant to environmental assessment.
+    if not extraction.environmental_relevance:
+        return {
+            "needs_clarification": False,
+            "can_reason": False,
+            "missing_fields": [],
+            "response": (
+                "I can help with the environmental assessment. "
+                "Tell me anything you know about the land, soil, crops, "
+                "climate, water, biodiversity, or other environmental "
+                "conditions you're assessing."
+            ),
+        }
+
+    # ---------------------------------------------------------
+    # CASE 3: Environmental message but no usable context yet
+    # ---------------------------------------------------------
+    #
+    # Example:
+    # "What should I do about biodiversity?"
+    #
+    # This is environmentally relevant, but there is not enough
+    # site-specific information to make a responsible recommendation.
+    if not has_environmental_context(state):
+        return {
+            "needs_clarification": True,
+            "can_reason": False,
+            "missing_fields": [],
+            "response": (
+                "I can help with that. Tell me whatever you know about "
+                "the environment you're assessing — even a simple "
+                "description of the land or soil is enough to start."
+            ),
+        }
+
+    # ---------------------------------------------------------
+    # CASE 4: Environmental context exists
+    # ---------------------------------------------------------
+    #
+    # Ask at most ONE useful targeted question.
     field_name, question = choose_next_question(
         state
     )
@@ -231,28 +382,49 @@ def process_extraction(
     if question:
         return {
             "needs_clarification": True,
+            "can_reason": False,
             "missing_fields": [field_name],
             "response": question,
         }
 
-    # We have at least some environmental context.
-    if has_environmental_context(state):
+    # ---------------------------------------------------------
+    # CASE 5: Enough context for environmental reasoning
+    # ---------------------------------------------------------
+    #
+    # This does NOT mean the profile is complete.
+    # It only means our clarification policy has no higher-priority
+    # question to ask before reasoning.
+    if not has_sufficient_reasoning_context(state):
         return {
             "needs_clarification": False,
+            "can_reason": False,
             "missing_fields": [],
             "response": (
-                "Got it. I have enough context to reason from "
-                "what you've shared so far."
+                "Got it. Tell me a little more about the environmental "
+                "conditions you're assessing, or ask me what you should "
+                "do to improve them."
             ),
         }
 
-    # No useful environmental information yet.
+    if not extraction.recommendation_requested:
+        return {
+            "needs_clarification": False,
+            "can_reason": False,
+            "missing_fields": [],
+            "response": (
+                "Got it. I have enough context to start an assessment. "
+                "If you'd like, ask me what you should do to improve "
+                "the environmental conditions."
+            ),
+        }
+
     return {
-        "needs_clarification": True,
+        "needs_clarification": False,
+        "can_reason": True,
         "missing_fields": [],
         "response": (
-            "Tell me whatever you know about the environment "
-            "you're working with — even a simple description is enough to start."
+            "Got it. I have enough context to reason from "
+            "what you've shared."
         ),
     }
 
@@ -298,7 +470,11 @@ def process_message(
             ↓
         memory update
             ↓
+        relevance check
+            ↓
         clarification decision
+            ↓
+        reasoning readiness decision
             ↓
         assistant response
     """
