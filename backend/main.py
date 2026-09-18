@@ -6,9 +6,17 @@ from schemas import (
     RecommendationResponse,
     RetrievalRequest,
     RetrievalResponse,
+    ChatRequest,
+    ChatResponse,
 )
 from retrieval_service import retrieve_chunks
 from reasoning_service import generate_recommendation
+
+from conversation_service import get_or_create_session
+from conversation_manager import (
+    build_environmental_profile,
+    process_message,
+)
 
 
 app = FastAPI(
@@ -68,6 +76,49 @@ def recommend(request: RecommendationRequest):
 
     return {
         "profile": request.profile,
+        "recommendation": recommendation,
+        "retrieved_evidence": retrieved_evidence,
+    }
+@app.post(
+    "/chat",
+    response_model=ChatResponse,
+)
+@app.post(
+    "/chat",
+    response_model=ChatResponse,
+)
+def chat(request: ChatRequest):
+    state = get_or_create_session(
+        request.session_id
+    )
+
+    result = process_message(
+        state=state,
+        message=request.message,
+    )
+
+    profile = build_environmental_profile(
+        state
+    )
+
+    recommendation = None
+    retrieved_evidence = []
+
+    # IMPORTANT:
+    # Only execute RAG + Gemini when the conversation manager
+    # explicitly allows reasoning.
+    if result.get("can_reason", False):
+        recommendation, retrieved_evidence = generate_recommendation(
+            profile=profile,
+            top_k=5,
+        )
+
+    return {
+        "session_id": request.session_id,
+        "response": result["response"],
+        "needs_clarification": result["needs_clarification"],
+        "missing_fields": result["missing_fields"],
+        "profile": profile,
         "recommendation": recommendation,
         "retrieved_evidence": retrieved_evidence,
     }
