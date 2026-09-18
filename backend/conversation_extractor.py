@@ -52,11 +52,34 @@ IMPORTANT RULES:
     For example, if the assistant asks about "cropping_pattern" and the
     user replies "I don't know", record "cropping_pattern" in
     unknown_fields.
-
 14. Do not mark a field unknown merely because it is absent from the
     latest user message. Only mark it unknown when the user explicitly
     indicates that they do not know, cannot provide, or have not checked
     that information in the context of the conversation.
+15. Set environmental_relevance to true only when the user's message
+    contains information, a question, or an observation that is meaningfully
+    related to the environmental assessment. This includes soil, climate,
+    rainfall, water, land, crops, biodiversity, habitat, pollution,
+    deforestation, or environmental management. Greetings, names,
+    casual conversation, unrelated topics, and gibberish should normally
+    have environmental_relevance set to false.
+16. Do not determine environmental_relevance from specific keywords alone.
+    Judge the meaning and context of the user's message.
+17. A message can be environmentally relevant even when it does not provide
+    a structured field. For example, an environmental question or qualitative
+    observation may be relevant.
+18. Set recommendation_requested to true only when the user is actually
+    asking for environmental advice, an intervention, a recommendation,
+    what they should do, how to improve the environmental condition, or
+    an equivalent request. Judge this from meaning and conversation
+    context, not from specific keywords alone.
+
+19. Set recommendation_requested to false when the user is only providing
+    environmental information, answering a clarification question, saying
+    they do not know something, greeting, or discussing an unrelated topic.
+
+20. A message may be environmentally relevant while recommendation_requested
+    is false.
 """
 
 
